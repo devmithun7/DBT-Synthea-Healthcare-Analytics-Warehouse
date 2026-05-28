@@ -1,0 +1,379 @@
+version: 2
+
+models:
+  - name: stg_synthea__patients
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: patient_id
+        data_type: varchar
+        tests: [unique, not_null]
+      - name: birth_date
+        data_type: date
+      - name: death_date
+        data_type: date
+      - name: social_security_number
+        data_type: varchar
+      - name: drivers_license_number
+        data_type: varchar
+      - name: passport_number
+        data_type: varchar
+      - name: name_prefix
+        data_type: varchar
+      - name: first_name
+        data_type: varchar
+      - name: last_name
+        data_type: varchar
+      - name: name_suffix
+        data_type: varchar
+      - name: maiden_name
+        data_type: varchar
+      - name: marital_status
+        data_type: varchar
+      - name: race
+        data_type: varchar
+      - name: ethnicity
+        data_type: varchar
+      - name: patient_gender
+        data_type: varchar
+      - name: birth_place
+        data_type: varchar
+      - name: home_address_line_1
+        data_type: varchar
+      - name: home_address_city
+        data_type: varchar
+      - name: home_address_county
+        data_type: varchar
+      - name: home_address_state
+        data_type: varchar
+      - name: home_address_postal_code
+        data_type: varchar
+      - name: home_address_latitude
+        data_type: float
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "between -90 and 90"
+      - name: home_address_longitude
+        data_type: float
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "between -180 and 180"
+      - name: healthcare_expenses
+        data_type: float
+      - name: healthcare_coverage
+        data_type: float
+      - name: loaded_at
+        data_type: timestamp_ntz
+        tests: [not_null]
+
+  - name: stg_synthea__encounters
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: encounter_id
+        data_type: varchar
+        tests: [unique, not_null]
+      - name: started_at
+        data_type: timestamp_ntz
+      - name: ended_at
+        data_type: timestamp_ntz
+      - name: patient_id
+        data_type: varchar
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_synthea__patients')
+                field: patient_id
+      - name: provider_id
+        data_type: varchar
+      - name: organization_id
+        data_type: varchar
+      - name: payer_id
+        data_type: varchar
+      - name: encounter_class
+        data_type: varchar
+      - name: is_emergency_visit
+        data_type: varchar
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Yes', 'No']
+      - name: is_inpatient_visit
+        data_type: varchar
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Yes', 'No']
+      - name: encounter_code
+        data_type: varchar
+      - name: encounter_description
+        data_type: varchar
+      - name: base_encounter_cost
+        data_type: float
+      - name: total_claim_cost
+        data_type: float
+      - name: encounter_payer_coverage
+        data_type: float
+      - name: encounter_reason_code
+        data_type: varchar
+        tests: [not_null]
+      - name: encounter_reason_description
+        data_type: varchar
+        tests: [not_null]
+      - name: loaded_at
+        data_type: timestamp_ntz
+        tests: [not_null]
+
+  - name: stg_synthea__conditions
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: started_at
+        data_type: timestamp_ntz
+      - name: stopped_at
+        data_type: timestamp_ntz
+      - name: patient_id
+        data_type: varchar
+        tests: [not_null]
+      - name: encounter_id
+        data_type: varchar
+        tests: [not_null]
+      - name: condition_code
+        data_type: varchar
+      - name: condition_description
+        data_type: varchar
+      - name: loaded_at
+        data_type: timestamp_ntz
+        tests: [not_null]
+
+  - name: stg_synthea__medications
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: started_at
+        data_type: timestamp_ntz
+      - name: stopped_at
+        data_type: timestamp_ntz
+      - name: patient_id
+        data_type: varchar
+        tests: [not_null]
+      - name: payer_id
+        data_type: varchar
+      - name: encounter_id
+        data_type: varchar
+        tests: [not_null]
+      - name: medication_code
+        data_type: varchar
+      - name: medication_description
+        data_type: varchar
+      - name: medication_base_cost
+        data_type: float
+      - name: medication_dispense_count
+        data_type: number
+      - name: medication_total_cost
+        data_type: float
+      - name: medication_reason_code
+        data_type: varchar
+        tests: [not_null]
+      - name: medication_reason_description
+        data_type: varchar
+        tests: [not_null]
+      - name: medication_payer_coverage
+        data_type: float
+      - name: loaded_at
+        data_type: timestamp_ntz
+        tests: [not_null]
+
+  - name: stg_synthea__procedures
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: procedure_at
+        data_type: timestamp_ntz
+      - name: patient_id
+        data_type: varchar
+        tests: [not_null]
+      - name: encounter_id
+        data_type: varchar
+        tests: [not_null]
+      - name: procedure_code
+        data_type: varchar
+      - name: procedure_description
+        data_type: varchar
+      - name: procedure_base_cost
+        data_type: float
+      - name: procedure_reason_code
+        data_type: varchar
+        tests: [not_null]
+      - name: procedure_reason_description
+        data_type: varchar
+        tests: [not_null]
+      - name: loaded_at
+        data_type: timestamp_ntz
+        tests: [not_null]
+
+  - name: stg_synthea__organizations
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: organization_id
+        data_type: varchar
+        tests: [unique, not_null]
+      - name: organization_name
+        data_type: varchar
+      - name: address_line_1
+        data_type: varchar
+      - name: address_city
+        data_type: varchar
+      - name: address_state
+        data_type: varchar
+      - name: address_postal_code
+        data_type: varchar
+      - name: address_latitude
+        data_type: float
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "between -90 and 90"
+      - name: address_longitude
+        data_type: float
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "between -180 and 180"
+      - name: organization_phone_number
+        data_type: number
+      - name: organization_revenue
+        data_type: float
+      - name: organization_utilization
+        data_type: number
+      - name: loaded_at
+        data_type: timestamp_ntz
+        tests: [not_null]
+
+  - name: stg_synthea__providers
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: provider_id
+        data_type: varchar
+        tests: [unique, not_null]
+      - name: organization_id
+        data_type: varchar
+      - name: provider_name
+        data_type: varchar
+      - name: provider_gender
+        data_type: varchar
+      - name: provider_specialty
+        data_type: varchar
+      - name: address_line_1
+        data_type: varchar
+      - name: address_city
+        data_type: varchar
+      - name: address_state
+        data_type: varchar
+      - name: address_postal_code
+        data_type: varchar
+      - name: address_latitude
+        data_type: float
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "between -90 and 90"
+      - name: address_longitude
+        data_type: float
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "between -180 and 180"
+      - name: provider_utilization
+        data_type: number
+      - name: loaded_at
+        data_type: timestamp_ntz
+        tests: [not_null]
+
+  - name: stg_synthea__payers
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: payer_id
+        data_type: varchar
+        tests: [unique, not_null]
+      - name: payer_name
+        data_type: varchar
+      - name: headquarters_address_line_1
+        data_type: varchar
+      - name: headquarters_address_city
+        data_type: varchar
+      - name: headquarters_address_state
+        data_type: varchar
+      - name: headquarters_address_postal_code
+        data_type: varchar
+      - name: payer_phone_number
+        data_type: number
+      - name: amount_covered
+        data_type: float
+      - name: amount_uncovered
+        data_type: float
+      - name: payer_revenue
+        data_type: float
+      - name: covered_encounters
+        data_type: number
+      - name: uncovered_encounters
+        data_type: number
+      - name: covered_medications
+        data_type: number
+      - name: uncovered_medications
+        data_type: number
+      - name: covered_procedures
+        data_type: number
+      - name: uncovered_procedures
+        data_type: number
+      - name: covered_immunizations
+        data_type: number
+      - name: uncovered_immunizations
+        data_type: number
+      - name: unique_customers
+        data_type: number
+      - name: qols_avg
+        data_type: float
+      - name: member_months
+        data_type: number
+      - name: loaded_at
+        data_type: timestamp_ntz
+        tests: [not_null]
+
+  - name: stg_synthea__payer_transitions
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: patient_id
+        data_type: varchar
+        tests: [not_null]
+      - name: coverage_start_year
+        data_type: number
+        tests: [not_null]
+      - name: coverage_end_year
+        data_type: number
+      - name: payer_id
+        data_type: varchar
+        tests: [not_null]
+      - name: coverage_ownership_type
+        data_type: varchar
+      - name: loaded_at
+        data_type: timestamp_ntz
+        tests: [not_null]

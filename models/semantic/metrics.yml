@@ -1,0 +1,485 @@
+﻿version: 2
+
+semantic_models:
+  # Grain: 1 row per encounter (encounter_id)
+  - name: encounters
+    description: |
+      Encounter-level analytics (one row per encounter).
+      Source: fct_synthea__encounters
+    model: ref('fct_synthea__encounters')
+    defaults:
+      agg_time_dimension: encounter_date
+
+    entities:
+      - name: encounter
+        type: primary
+        expr: encounter_id
+      - name: patient
+        type: foreign
+        expr: patient_key
+      - name: provider
+        type: foreign
+        expr: provider_key
+      - name: payer
+        type: foreign
+        expr: payer_key
+      - name: organization
+        type: foreign
+        expr: organization_key
+
+    measures:
+      - name: encounter_count
+        description: Total number of encounters (visits)
+        agg: count
+        expr: encounter_id
+
+      - name: emergency_visit_count
+        description: Number of emergency department visits
+        agg: sum
+        expr: case when is_emergency_visit = 'Yes' then 1 else 0 end
+
+      - name: inpatient_admission_count
+        description: Number of inpatient admissions
+        agg: sum
+        expr: case when is_inpatient = 'Yes' then 1 else 0 end
+
+      - name: total_encounter_cost
+        description: Sum of all encounter costs
+        agg: sum
+        expr: total_claim_cost
+
+      - name: avg_encounter_cost
+        description: Average cost per encounter
+        agg: average
+        expr: total_claim_cost
+
+      - name: total_payer_coverage
+        description: Sum of insurance payments
+        agg: sum
+        expr: encounter_payer_coverage
+
+      - name: total_patient_oop
+        description: Sum of patient out-of-pocket costs
+        agg: sum
+        expr: patient_out_of_pocket
+
+      - name: avg_duration_hours
+        description: Average encounter duration in hours
+        agg: average
+        expr: duration_hours
+
+      - name: payer_coverage_pct
+        description: Average percentage of costs covered by insurance (0-100)
+        agg: average
+        expr: |
+          case
+            when total_claim_cost > 0
+              then (encounter_payer_coverage / total_claim_cost) * 100
+            else 0
+          end
+
+    dimensions:
+      - name: encounter_id
+        type: categorical
+        expr: encounter_id
+
+      - name: encounter_date
+        type: time
+        type_params:
+          time_granularity: day
+        expr: encounter_start_time
+
+      - name: care_setting
+        type: categorical
+        description: Type of care (ambulatory, inpatient, emergency, urgent_care, wellness)
+        expr: care_setting
+
+      - name: is_emergency
+        type: categorical
+        description: Whether encounter was in emergency department
+        expr: is_emergency_visit
+
+      - name: is_inpatient
+        type: categorical
+        description: Whether encounter was inpatient admission
+        expr: is_inpatient
+
+  # Grain: 1 row per index inpatient discharge/readmission tracking record (readmission_key)
+  - name: readmissions
+    description: |
+      Readmission analytics (one row per inpatient discharge with readmission tracking).
+      Source: fct_synthea__readmissions. Payer is not on this fact; join via encounters for payer-level analysis.
+    model: ref('fct_synthea__readmissions')
+    defaults:
+      agg_time_dimension: discharge_date
+
+    entities:
+      - name: readmission
+        type: primary
+        expr: readmission_key
+      - name: encounter
+        type: foreign
+        expr: index_encounter_id
+      - name: patient
+        type: foreign
+        expr: patient_key
+      - name: organization
+        type: foreign
+        expr: organization_key
+
+    measures:
+      - name: discharge_count
+        description: Total number of inpatient discharges
+        agg: count
+        expr: index_encounter_id
+
+      - name: readmission_30day_count
+        description: Number of readmissions within 30 days
+        agg: sum
+        expr: case when is_30_day_readmission = 'Yes' then 1 else 0 end
+
+      - name: avg_days_to_readmission
+        description: Average days from discharge to readmission (30-day readmits only)
+        agg: average
+        expr: case when is_30_day_readmission = 'Yes' then days_to_readmission else null end
+
+    dimensions:
+      - name: discharge_id
+        type: categorical
+        expr: index_encounter_id
+
+      - name: discharge_date
+        type: time
+        type_params:
+          time_granularity: day
+        expr: |
+          to_timestamp_ntz(
+            to_varchar(discharge_date_key),
+            'YYYYMMDD'
+          )
+
+      - name: had_readmission
+        type: categorical
+        expr: has_readmission
+
+      - name: readmission_window
+        type: categorical
+        expr: |
+          case
+            when is_7_day_readmission = 'Yes' then '0-7 days'
+            when is_30_day_readmission = 'Yes' then '8-30 days'
+            else 'No readmission'
+          end
+
+  # Grain: SCD2 row per patient insurance period (patient_id + effective_from)
+  - name: patients
+    description: |
+      Patient insurance-period dimension (SCD2 grain: one row per patient per coverage period).
+      Source: dim_synthea__patient
+    model: ref('dim_synthea__patient')
+    defaults:
+      agg_time_dimension: insurance_period_start
+
+    entities:
+      - name: patient
+        type: primary
+        expr: patient_key
+      - name: patient_member
+        type: unique
+        expr: patient_id
+
+    measures:
+      - name: patient_count
+        description: Number of unique patients
+        agg: count_distinct
+        expr: patient_id
+
+    dimensions:
+      - name: patient_key
+        type: categorical
+        expr: patient_key
+
+      - name: patient_id
+        type: categorical
+        expr: patient_id
+
+      - name: patient_name
+        type: categorical
+        expr: concat(first_name, ' ', last_name)
+
+      - name: gender
+        type: categorical
+        expr: patient_gender
+
+      - name: race
+        type: categorical
+        expr: race
+
+      - name: ethnicity
+        type: categorical
+        expr: ethnicity
+
+      - name: insurance_period_start
+        type: time
+        type_params:
+          time_granularity: day
+        expr: effective_from
+
+      - name: insurance_period_end
+        type: time
+        type_params:
+          time_granularity: day
+        expr: effective_to
+
+      - name: is_current_insurance
+        type: categorical
+        expr: is_current
+
+  # Grain: 1 row per provider (provider_id)
+  - name: providers
+    description: Healthcare provider dimension
+    model: ref('dim_synthea__provider')
+
+    entities:
+      - name: provider
+        type: primary
+        expr: provider_key
+
+    dimensions:
+      - name: provider_key
+        type: categorical
+        expr: provider_key
+
+      - name: provider_id
+        type: categorical
+        expr: provider_id
+
+      - name: provider_name
+        type: categorical
+        expr: provider_name
+
+      - name: specialty
+        type: categorical
+        expr: provider_specialty
+
+      - name: city
+        type: categorical
+        expr: address_city
+
+      - name: state
+        type: categorical
+        expr: address_state
+
+  # Grain: 1 row per payer (payer_id)
+  - name: payers
+    description: Insurance payer dimension
+    model: ref('dim_synthea__payer')
+
+    entities:
+      - name: payer
+        type: primary
+        expr: payer_key
+
+    dimensions:
+      - name: payer_key
+        type: categorical
+        expr: payer_key
+
+      - name: payer_id
+        type: categorical
+        expr: payer_id
+
+      - name: payer_name
+        type: categorical
+        expr: payer_name
+
+      - name: state
+        type: categorical
+        expr: address_state
+
+  # Grain: 1 row per organization (organization_id)
+  - name: organizations
+    description: Healthcare organization dimension
+    model: ref('dim_synthea__organization')
+
+    entities:
+      - name: organization
+        type: primary
+        expr: organization_key
+
+    dimensions:
+      - name: organization_key
+        type: categorical
+        expr: organization_key
+
+      - name: organization_id
+        type: categorical
+        expr: organization_id
+
+      - name: organization_name
+        type: categorical
+        expr: organization_name
+
+      - name: city
+        type: categorical
+        expr: address_city
+
+      - name: state
+        type: categorical
+        expr: address_state
+
+metrics:
+  # Note: Metric grain is determined at query time by selected dimensions/time grain.
+  - name: emergency_visits
+    description: Count of emergency department visits
+    type: simple
+    label: Emergency Visits
+    type_params:
+      measure:
+        name: emergency_visit_count
+
+  - name: inpatient_admits
+    description: Count of inpatient admissions
+    type: simple
+    label: Inpatient Admits
+    type_params:
+      measure:
+        name: inpatient_admission_count
+
+  - name: payer_coverage_total
+    description: Total insurance payments
+    type: simple
+    label: Payer Coverage Total
+    type_params:
+      measure:
+        name: total_payer_coverage
+
+  - name: patient_oop_total
+    description: Total patient out-of-pocket costs
+    type: simple
+    label: Patient OOP Total
+    type_params:
+      measure:
+        name: total_patient_oop
+
+  - name: total_encounters
+    description: |
+      Total number of patient encounters (visits, admissions, etc.).
+      Search terms: visits, appointments, total_visits, visit_volume.
+    type: simple
+    label: Total Encounters
+    type_params:
+      measure:
+        name: encounter_count
+
+  - name: avg_cost_per_encounter
+    description: |
+      Average healthcare cost per encounter.
+      Search terms: average_visit_cost, cost_per_visit, mean_cost_per_visit.
+    type: simple
+    label: Avg Cost Per Encounter
+    type_params:
+      measure:
+        name: avg_encounter_cost
+
+  - name: total_healthcare_cost
+    description: |
+      Sum of all healthcare encounter costs.
+      Search terms: total_cost, total_claim_cost, healthcare_spend, total_spend.
+    type: simple
+    label: Total Healthcare Cost
+    type_params:
+      measure:
+        name: total_encounter_cost
+
+  - name: ed_utilization_rate
+    description: |
+      Percentage of encounters in the emergency department.
+      High ED utilization may indicate limited primary care access.
+      Search terms: er_utilization, emergency_visit_rate, ed_rate.
+    type: ratio
+    label: ED Utilization Rate
+    type_params:
+      numerator: emergency_visits
+      denominator: total_encounters
+
+  - name: inpatient_admission_rate
+    description: |
+      Percentage of encounters requiring inpatient admission.
+      Search terms: hospital_admission_rate, hospitalization_rate, admission_rate.
+    type: ratio
+    label: Inpatient Admission Rate
+    type_params:
+      numerator: inpatient_admits
+      denominator: total_encounters
+
+  - name: readmission_count
+    description: |
+      Absolute number of 30-day readmissions.
+      Search terms: readmits, total_readmissions, readmit_count.
+    type: simple
+    label: Readmission Count
+    type_params:
+      measure:
+        name: readmission_30day_count
+
+  - name: total_discharges
+    description: |
+      Total number of inpatient discharges.
+      Search terms: hospitalizations, hospital_visits, admits.
+    type: simple
+    label: Discharge Count
+    type_params:
+      measure:
+        name: discharge_count
+
+  - name: readmission_rate_30day
+    description: |
+      Percentage of inpatient discharges followed by readmission within 30 days.
+      Industry benchmark is below 15%. Lower is better.
+      Search terms: readmission_rate, readmit_rate, quality_metric, hospital_readmission_rate.
+    type: ratio
+    label: 30-Day Readmission Rate
+    type_params:
+      numerator: readmission_count
+      denominator: total_discharges
+
+  - name: metric_avg_days_to_readmission
+    description: |
+      Average number of days from discharge to readmission.
+      Search terms: days_to_readmit, readmission_timing, average_readmission_days.
+    type: simple
+    label: Avg Days to Readmission
+    type_params:
+      measure:
+        name: avg_days_to_readmission
+
+  - name: patient_cost_burden
+    description: |
+      Share of total healthcare costs paid out-of-pocket by patients.
+      Search terms: out_of_pocket_rate, patient_share, copay_rate, cost_sharing_rate.
+    type: ratio
+    label: Patient Cost Burden
+    type_params:
+      numerator: patient_oop_total
+      denominator: total_healthcare_cost
+
+  - name: insurance_coverage_rate
+    description: |
+      Share of total healthcare costs covered by insurance.
+      Search terms: coverage_percentage, insurance_paid_percentage, payer_coverage_rate.
+    type: ratio
+    label: Insurance Coverage Rate
+    type_params:
+      numerator: payer_coverage_total
+      denominator: total_healthcare_cost
+
+  - name: avg_encounter_duration
+    description: |
+      Average length of stay or encounter duration in hours.
+      Search terms: average_los, average_length_of_stay, mean_duration, contact_hours.
+    type: simple
+    label: Avg Encounter Duration (hrs)
+    type_params:
+      measure:
+        name: avg_duration_hours

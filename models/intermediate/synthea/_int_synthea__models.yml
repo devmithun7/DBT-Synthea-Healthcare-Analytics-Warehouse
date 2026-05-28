@@ -1,0 +1,194 @@
+version: 2
+
+models:
+  - name: int_synthea__patient_insurance_periods
+    description: >
+      SCD Type 2 preparation. Explodes payer transitions into date-bounded insurance periods
+      with is_current and scd2_version.
+    columns:
+      - name: patient_id
+        tests: [not_null]
+      - name: payer_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_synthea__payers')
+                field: payer_id
+      - name: payer_name
+        tests: [not_null]
+      - name: effective_from
+        tests: [not_null]
+      - name: effective_to
+        tests: [not_null]
+      - name: is_current
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Yes', 'No']
+      - name: scd2_version
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: '>= 1'
+      - name: patient_gender
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['M', 'F', 'O', 'U']
+              config:
+                severity: warn
+
+  - name: int_synthea__encounter_enriched
+    description: >
+      Encounters joined to provider, organization, and payer with derived duration,
+      cost breakdown, care setting, and visit flags.
+    columns:
+      - name: encounter_id
+        tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_synthea__encounters')
+                field: encounter_id
+      - name: patient_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_synthea__patients')
+                field: patient_id
+      - name: encounter_start_time
+        tests: [not_null]
+      - name: care_setting
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - ambulatory
+                  - inpatient
+                  - emergency
+                  - urgent_care
+                  - wellness
+                  - other
+      - name: total_claim_cost
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: '>= 0'
+              config:
+                where: 'total_claim_cost is not null'
+                severity: warn
+      - name: encounter_payer_coverage
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: '>= 0'
+              config:
+                where: 'encounter_payer_coverage is not null'
+                severity: warn
+      - name: patient_out_of_pocket
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: '>= 0'
+              config:
+                severity: warn
+      - name: payer_coverage_pct
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: 'between 0 and 100'
+              config:
+                where: 'payer_coverage_pct is not null'
+                severity: warn
+      - name: is_emergency_visit
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Yes', 'No']
+      - name: is_inpatient
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Yes', 'No']
+      - name: provider_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_synthea__providers')
+                field: provider_id
+              config:
+                severity: warn
+      - name: payer_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_synthea__payers')
+                field: payer_id
+              config:
+                severity: warn
+
+  - name: int_synthea__readmission_flags
+    description: >
+      First post-discharge encounter per inpatient discharge with 7/30/90-day readmission flags.
+    columns:
+      - name: index_encounter_id
+        tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_synthea__encounters')
+                field: encounter_id
+      - name: readmit_encounter_id
+        tests:
+          - relationships:
+              arguments:
+                to: ref('stg_synthea__encounters')
+                field: encounter_id
+              config:
+                where: 'readmit_encounter_id is not null'
+                severity: warn
+      - name: patient_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_synthea__patients')
+                field: patient_id
+      - name: discharge_date
+        tests: [not_null]
+      - name: has_readmission
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Yes', 'No']
+      - name: is_30_day_readmission
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Yes', 'No']
+      - name: is_7_day_readmission
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['Yes', 'No']
+      - name: is_90_day_readmission
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['Yes', 'No']
+      - name: is_same_organization_readmission
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['Yes', 'No']

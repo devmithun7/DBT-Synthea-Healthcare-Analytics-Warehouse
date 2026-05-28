@@ -1,0 +1,41 @@
+name: 'synthea_healthcare_warehouse'
+version: '1.0.0'
+config-version: 2
+
+profile: 'synthea_healthcare_warehouse'
+
+model-paths: ['models']
+analysis-paths: ['analyses']
+test-paths: ['tests']
+seed-paths: ['seeds']
+macro-paths: ['macros']
+snapshot-paths: ['snapshots']
+
+target-path: 'target'
+clean-targets:
+  - 'target'
+  - 'dbt_packages'
+
+vars:
+  raw_database: SYNTHEA_WAREHOUSE
+  raw_schema: RAW
+  test_audit_schema: REPORTING
+  test_audit_table: DBT_TEST_RESULTS
+
+on-run-end:
+  - "{{ log_test_results(results) }}"
+
+models:
+  synthea_healthcare_warehouse:
+    staging:
+      +materialized: view
+      +schema: STAGING
+    intermediate:
+      +materialized: view
+      +schema: INTERMEDIATE
+    marts:
+      +materialized: table
+      +schema: MARTS
+    reporting:
+      +materialized: table
+      +schema: REPORTING

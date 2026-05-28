@@ -1,0 +1,15 @@
+# Copy to ~/.dbt/profiles.yml and set SNOWFLAKE_PASSWORD (or use key-pair auth).
+
+synthea_healthcare_warehouse:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: DCLVOWK-UW14956
+      user: DEVMITH
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: ACCOUNTADMIN
+      database: SYNTHEA_WAREHOUSE
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'COMPUTE_WH') }}"
+      schema: STAGING
+      threads: 4

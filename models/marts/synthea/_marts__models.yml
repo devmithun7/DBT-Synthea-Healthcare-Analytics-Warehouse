@@ -1,0 +1,199 @@
+version: 2
+
+models:
+  - name: dim_synthea__patient
+    description: SCD Type 2 patient dimension with insurance history (one row per coverage period).
+    columns:
+      - name: patient_key
+        tests: [unique, not_null]
+      - name: patient_id
+        tests: [not_null]
+      - name: effective_from
+        tests: [not_null]
+      - name: effective_to
+        tests: [not_null]
+      - name: is_current
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Yes', 'No']
+      - name: payer_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_synthea__payer')
+                field: payer_id
+
+  - name: dim_synthea__provider
+    description: Provider dimension (Type 1).
+    columns:
+      - name: provider_key
+        tests: [unique, not_null]
+      - name: provider_id
+        tests: [unique, not_null]
+
+  - name: dim_synthea__organization
+    description: Organization dimension (Type 1).
+    columns:
+      - name: organization_key
+        tests: [unique, not_null]
+      - name: organization_id
+        tests: [unique, not_null]
+
+  - name: dim_synthea__payer
+    description: Payer dimension (Type 1).
+    columns:
+      - name: payer_key
+        tests: [unique, not_null]
+      - name: payer_id
+        tests: [unique, not_null]
+      - name: payer_name
+        tests: [not_null]
+
+  - name: dim_synthea__date
+    description: Calendar dimension (1900-01-01 through 2030-12-31). MetricFlow time spine.
+    time_spine:
+      standard_granularity_column: calendar_date
+    columns:
+      - name: date_key
+        tests: [unique, not_null]
+      - name: calendar_date
+        granularity: day
+        tests: [unique, not_null]
+      - name: is_weekend
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['Yes', 'No']
+
+  - name: fct_synthea__encounters
+    description: Encounter fact (one row per encounter).
+    columns:
+      - name: encounter_key
+        tests: [unique, not_null]
+      - name: encounter_id
+        tests: [unique, not_null]
+      - name: encounter_start_time
+        tests: [not_null]
+      - name: care_setting
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - ambulatory
+                  - inpatient
+                  - emergency
+                  - urgent_care
+                  - wellness
+                  - other
+      - name: patient_key
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_synthea__patient')
+                field: patient_key
+              config:
+                severity: warn
+      - name: provider_key
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_synthea__provider')
+                field: provider_key
+              config:
+                where: 'provider_key is not null'
+                severity: warn
+      - name: organization_key
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_synthea__organization')
+                field: organization_key
+              config:
+                where: 'organization_key is not null'
+                severity: warn
+      - name: payer_key
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_synthea__payer')
+                field: payer_key
+              config:
+                where: 'payer_key is not null'
+                severity: warn
+      - name: encounter_date_key
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_synthea__date')
+                field: date_key
+              config:
+                severity: warn
+      - name: is_emergency_visit
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['Yes', 'No']
+      - name: is_inpatient
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['Yes', 'No']
+
+  - name: fct_synthea__readmissions
+    description: Readmission fact (one row per inpatient discharge).
+    columns:
+      - name: readmission_key
+        tests: [unique, not_null]
+      - name: index_encounter_id
+        tests: [unique, not_null]
+      - name: is_30_day_readmission
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Yes', 'No']
+      - name: has_readmission
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['Yes', 'No']
+      - name: patient_key
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_synthea__patient')
+                field: patient_key
+              config:
+                severity: warn
+
+  - name: fct_synthea__clinical_events
+    description: Union of conditions, procedures, and medications (one row per clinical event).
+    columns:
+      - name: clinical_event_key
+        tests: [unique, not_null]
+      - name: event_type
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['condition', 'procedure', 'medication']
+      - name: patient_key
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_synthea__patient')
+                field: patient_key
+              config:
+                severity: warn
+      - name: encounter_key
+        tests:
+          - relationships:
+              arguments:
+                to: ref('fct_synthea__encounters')
+                field: encounter_key
+              config:
+                where: 'encounter_key is not null'
+                severity: warn

@@ -1,0 +1,118 @@
+version: 2
+
+models:
+  - name: rpt_synthea__monthly_encounters
+    description: Monthly encounter summary by care setting and payer.
+    columns:
+      - name: year_month
+        tests: [not_null]
+      - name: care_setting
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - ambulatory
+                  - inpatient
+                  - emergency
+                  - urgent_care
+                  - wellness
+                  - other
+      - name: payer_name
+        tests: [not_null]
+      - name: encounter_count
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: '>= 1'
+
+  - name: rpt_synthea__readmission_rate_monthly
+    description: Monthly 30-day readmission rate by diagnosis and payer.
+    columns:
+      - name: year_month
+        tests: [not_null]
+      - name: primary_diagnosis
+        tests: [not_null]
+      - name: payer_name
+        tests: [not_null]
+      - name: discharge_count
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: '>= 1'
+      - name: readmission_30day_rate_pct
+        tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: 'between 0 and 100'
+              config:
+                where: 'readmission_30day_rate_pct is not null'
+      - name: quality_flag
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Alert', 'OK']
+
+  - name: rpt_synthea__cost_of_care_annual
+    description: Annual cost of care by patient and fiscal year.
+    columns:
+      - name: cost_of_care_key
+        tests: [unique, not_null]
+      - name: patient_id
+        tests: [not_null]
+      - name: fiscal_year
+        tests: [not_null]
+      - name: cost_category
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['High Cost', 'Medium Cost', 'Low Cost']
+
+  - name: rpt_synthea__provider_performance
+    description: Provider performance scorecard with volume, cost, and readmission metrics.
+    columns:
+      - name: provider_key
+        tests: [unique, not_null]
+      - name: provider_id
+        tests: [not_null]
+      - name: total_encounters
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: '>= 1'
+      - name: quality_flag
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - 'High Risk (Readmission)'
+                  - 'High Cost'
+                  - 'Low Volume'
+                  - 'OK'
+
+  - name: rpt_synthea__high_risk_patients
+    description: High-risk patients for care management outreach.
+    columns:
+      - name: patient_id
+        tests: [not_null]
+      - name: risk_level
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Very High', 'High', 'Moderate']
+      - name: primary_risk_factor
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - 'Recent Readmission'
+                  - 'Frequent ED User'
+                  - 'High Cost'
+                  - 'Multiple Chronic Conditions'
+                  - 'Other'

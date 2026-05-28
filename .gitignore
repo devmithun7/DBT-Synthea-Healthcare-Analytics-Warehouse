@@ -1,0 +1,16 @@
+target/
+dbt_packages/
+logs/
+*.log
+
+.env
+.env.*
+
+# Local dbt profile (keep profiles.yml.example in repo)
+profiles.yml
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

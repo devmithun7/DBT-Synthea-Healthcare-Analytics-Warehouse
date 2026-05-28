@@ -1,0 +1,148 @@
+version: 2
+
+sources:
+  - name: synthea
+    description: >
+      Synthea synthetic healthcare data loaded into Snowflake RAW schema.
+      These tables are source-conformed extracts and are not transformed in dbt.
+    database: "{{ var('raw_database') }}"
+    schema: "{{ var('raw_schema') }}"
+    tables:
+      - name: patients
+        identifier: PATIENTS
+        description: Patient demographics, identifiers, and socioeconomic attributes.
+        config:
+          freshness:
+            warn_after: {count: 30, period: day}
+            error_after: {count: 45, period: day}
+        columns:
+          - name: ID
+            tests:
+              - not_null
+          - name: BIRTHDATE
+            tests:
+              - not_null
+      - name: encounters
+        identifier: ENCOUNTERS
+        description: Clinical encounters linking patients to providers, organizations, and payers.
+        config:
+          freshness:
+            warn_after: {count: 30, period: day}
+            error_after: {count: 45, period: day}
+        columns:
+          - name: ID
+            tests:
+              - not_null
+          - name: PATIENT_ID
+            tests:
+              - not_null
+      - name: conditions
+        identifier: CONDITIONS
+        description: Diagnosed conditions documented during patient encounters.
+        config:
+          freshness:
+            warn_after: {count: 30, period: day}
+            error_after: {count: 45, period: day}
+        columns:
+          - name: PATIENT_ID
+            tests:
+              - not_null
+          - name: ENCOUNTER_ID
+            tests:
+              - not_null
+          - name: CODE
+            tests:
+              - not_null
+      - name: medications
+        identifier: MEDICATIONS
+        description: Medication orders and fills associated with encounters.
+        config:
+          freshness:
+            warn_after: {count: 30, period: day}
+            error_after: {count: 45, period: day}
+        columns:
+          - name: PATIENT_ID
+            tests:
+              - not_null
+          - name: ENCOUNTER_ID
+            tests:
+              - not_null
+          - name: CODE
+            tests:
+              - not_null
+      - name: procedures
+        identifier: PROCEDURES
+        description: Clinical procedures performed during encounters.
+        config:
+          freshness:
+            warn_after: {count: 30, period: day}
+            error_after: {count: 45, period: day}
+        columns:
+          - name: PATIENT
+            tests:
+              - not_null
+          - name: ENCOUNTER
+            tests:
+              - not_null
+          - name: CODE
+            tests:
+              - not_null
+      - name: organizations
+        identifier: ORGANIZATIONS
+        description: Healthcare organizations where care is delivered.
+        config:
+          freshness:
+            warn_after: {count: 30, period: day}
+            error_after: {count: 45, period: day}
+        columns:
+          - name: ID
+            tests:
+              - not_null
+          - name: NAME
+            tests:
+              - not_null
+      - name: providers
+        identifier: PROVIDERS
+        description: Clinicians and care providers affiliated with organizations.
+        config:
+          freshness:
+            warn_after: {count: 30, period: day}
+            error_after: {count: 45, period: day}
+        columns:
+          - name: ID
+            tests:
+              - not_null
+          - name: NAME
+            tests:
+              - not_null
+      - name: payers
+        identifier: PAYERS
+        description: Insurance payers and aggregated coverage statistics.
+        config:
+          freshness:
+            warn_after: {count: 30, period: day}
+            error_after: {count: 45, period: day}
+        columns:
+          - name: ID
+            tests:
+              - not_null
+          - name: NAME
+            tests:
+              - not_null
+      - name: payer_transitions
+        identifier: PAYER_TRANSITIONS
+        description: Yearly payer coverage transitions per patient.
+        config:
+          freshness:
+            warn_after: {count: 30, period: day}
+            error_after: {count: 45, period: day}
+        columns:
+          - name: PATIENT
+            tests:
+              - not_null
+          - name: START_YEAR
+            tests:
+              - not_null
+          - name: PAYER
+            tests:
+              - not_null
