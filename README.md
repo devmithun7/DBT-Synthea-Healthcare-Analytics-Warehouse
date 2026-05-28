@@ -1,4 +1,4 @@
-# Synthea Healthcare Warehouse
+# Synthea Healthcare Analytics Warehouse
 
 [![dbt](https://img.shields.io/badge/dbt-1.12%2B-orange)](https://www.getdbt.com/)
 [![SQL](https://img.shields.io/badge/SQL-Snowflake-blue)](https://www.snowflake.com/)
